@@ -1,0 +1,5 @@
+/target
+data.csv
+.env
+parse_file.rs
+output.json
