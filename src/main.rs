@@ -18,14 +18,20 @@ struct SleepMetrics {
 }
 
 #[derive(Serialize)]
+struct MetricComparison {
+    percentage_difference: f32,
+    average: u16,
+}
+
+#[derive(Serialize)]
 struct SleepMetricsResponse {
-    rem_sleep: String,
-    deep_sleep: String,
-    total_sleep: String,
-    restfulness: String,
-    efficiency: String,
-    timing: String,
-    latency: String,
+    rem_sleep: MetricComparison,
+    deep_sleep: MetricComparison,
+    total_sleep: MetricComparison,
+    restfulness: MetricComparison,
+    efficiency: MetricComparison,
+    timing: MetricComparison,
+    latency: MetricComparison,
 }
 
 struct BaselineAverages {
@@ -61,6 +67,14 @@ fn multiplication(number: u16, count: u16) -> u32 {
     result
 }
 
+fn calculate_percentage_difference(new_value: u16, baseline: u16) -> f32 {
+    if baseline == 0 {
+        return 0.0;
+    }
+    let difference = new_value as f32 - baseline as f32;
+    (difference / baseline as f32) * 100.0
+}
+
 async fn update_metric(
     con: &mut Connection,
     key: &str,
@@ -94,14 +108,6 @@ async fn update_metric(
         .await?;
 
     Ok(())
-}
-
-fn get_sleep_category(is_good: bool) -> String {
-    if is_good {
-        "Good Sleep Quality".to_string()
-    } else {
-        "Poor Sleep Quality".to_string()
-    }
 }
 
 async fn get_metric_average(
@@ -176,13 +182,52 @@ async fn handler(event: LambdaEvent<Value>) -> Result<SleepMetricsResponse, Erro
 
     let baseline = BaselineAverages::from_redis(&redis_client).await?;
     let response = SleepMetricsResponse {
-        rem_sleep: get_sleep_category(evaluate_metric(metrics.rem_sleep, baseline.rem_sleep)),
-        deep_sleep: get_sleep_category(evaluate_metric(metrics.deep_sleep, baseline.deep_sleep)),
-        total_sleep: get_sleep_category(evaluate_metric(metrics.total_sleep, baseline.total_sleep)),
-        restfulness: get_sleep_category(evaluate_metric(metrics.restfulness, baseline.restfulness)),
-        efficiency: get_sleep_category(evaluate_metric(metrics.efficiency, baseline.efficiency)),
-        timing: get_sleep_category(evaluate_metric(metrics.timing, baseline.timing)),
-        latency: get_sleep_category(evaluate_metric(metrics.latency, baseline.latency)),
+        rem_sleep: MetricComparison {
+            percentage_difference: calculate_percentage_difference(
+                metrics.rem_sleep,
+                baseline.rem_sleep,
+            ),
+            average: baseline.rem_sleep,
+        },
+        deep_sleep: MetricComparison {
+            percentage_difference: calculate_percentage_difference(
+                metrics.deep_sleep,
+                baseline.deep_sleep,
+            ),
+            average: baseline.deep_sleep,
+        },
+        total_sleep: MetricComparison {
+            percentage_difference: calculate_percentage_difference(
+                metrics.total_sleep,
+                baseline.total_sleep,
+            ),
+            average: baseline.total_sleep,
+        },
+        restfulness: MetricComparison {
+            percentage_difference: calculate_percentage_difference(
+                metrics.restfulness,
+                baseline.restfulness,
+            ),
+            average: baseline.restfulness,
+        },
+        efficiency: MetricComparison {
+            percentage_difference: calculate_percentage_difference(
+                metrics.efficiency,
+                baseline.efficiency,
+            ),
+            average: baseline.efficiency,
+        },
+        timing: MetricComparison {
+            percentage_difference: calculate_percentage_difference(metrics.timing, baseline.timing),
+            average: baseline.timing,
+        },
+        latency: MetricComparison {
+            percentage_difference: calculate_percentage_difference(
+                metrics.latency,
+                baseline.latency,
+            ),
+            average: baseline.latency,
+        },
     };
 
     BaselineAverages::update_averages(&redis_client, &metrics).await?;
